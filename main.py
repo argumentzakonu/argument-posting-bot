@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import re
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
@@ -34,17 +33,6 @@ class AdminReply(StatesGroup):
   waiting_for_text = State()
 
 
-# Функція для конвертації Markdown (**жирний**) в HTML (<b>жирний</b>)
-def md_to_html(text: str) -> str:
-  if not text:
-    return ""
-  # Заміна **текст** на <b>текст</b>
-  text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
-  # Заміна *текст* на <i>текст</i>
-  text = re.sub(r"\*(.*?)\*", r"<i>\1</i>", text)
-  return text
-
-
 # --- БОТ ПУБЛІКАЦІЙ ---
 @dp_post.message(CommandStart())
 async def start_posting(message: types.Message):
@@ -57,11 +45,12 @@ async def start_posting(message: types.Message):
 
 @dp_post.message(F.from_user.id == ADMIN_ID, F.text)
 async def post_text(message: types.Message):
-  formatted_text = md_to_html(message.text) + SIGNATURE
+  # Зберігаємо оригінальне HTML-форматування Telegram (включаючи жирний шрифт з клієнта)
+  full_text = message.html_text + SIGNATURE
   try:
     await bot_post.send_message(
         chat_id=CHANNEL_ID,
-        text=formatted_text,
+        text=full_text,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
@@ -72,7 +61,8 @@ async def post_text(message: types.Message):
 
 @dp_post.message(F.from_user.id == ADMIN_ID, F.photo)
 async def post_photo(message: types.Message):
-  caption = md_to_html(message.caption or "") + SIGNATURE
+  # Зберігаємо форматування підпису до фото
+  caption = (message.html_text if message.caption else "") + SIGNATURE
   try:
     await bot_post.send_photo(
         chat_id=CHANNEL_ID,
