@@ -19,7 +19,7 @@ ADMIN_ID = 630822108
 FEEDBACK_LINK = "https://t.me/argumentzakonubot"
 
 # Підпис з терезами та жирним посиланням
-SIGNATURE = f"\n\n⚖️ <b><a href='{FEEDBACK_LINK}'>Надіслати новину</a></b>"
+SIGNATURE = f"\n\n⚖️ <b><a href='{FEEDBACK_LINK}'>Зв'язатися з нами | Консультації | Співпраця | Послуги</a></b>"
 # -------------------------------------------------
 
 bot_post = Bot(token=POSTING_BOT_TOKEN)
