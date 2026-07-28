@@ -5,6 +5,9 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 # ----------------- НАЛАШТУВАННЯ -----------------
 POSTING_BOT_TOKEN = "8704920529:AAHj2JA5QpiiU16hIoA-gKFLN3o8cVuiLvA"
@@ -25,7 +28,10 @@ bot_feed = Bot(token=FEEDBACK_BOT_TOKEN)
 dp_post = Dispatcher()
 dp_feed = Dispatcher()
 
-users_mapping = {}
+
+# Стан для очікування відповіді адміна
+class AdminReply(StatesGroup):
+  waiting_for_text = State()
 
 
 # --- БОТ ПУБЛІКАЦІЙ ---
@@ -43,7 +49,10 @@ async def post_text(message: types.Message):
   full_text = message.text + SIGNATURE
   try:
     await bot_post.send_message(
-        chat_id=CHANNEL_ID, text=full_text, parse_mode=ParseMode.HTML
+        chat_id=CHANNEL_ID,
+        text=full_text,
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
     )
     await message.answer("✅ **Опубліковано в канал!**")
   except Exception as e:
@@ -74,38 +83,71 @@ async def start_feedback(message: types.Message):
     )
 
 
-# 1. Відповідь адміна користувачу (працює ТІЛЬКИ через "Відповісти / Reply")
-@dp_feed.message(F.from_user.id == ADMIN_ID, F.reply_to_message)
-async def reply_to_user(message: types.Message):
-  user_id = users_mapping.get(message.reply_to_message.message_id)
-  if user_id:
-    try:
-      await bot_feed.copy_message(
-          chat_id=user_id,
-          from_chat_id=message.chat.id,
-          message_id=message.message_id,
-      )
-      await message.answer("✅ Ваша відповідь надіслана користувачу.")
-    except Exception as e:
-      await message.answer(f"❌ Не вдалося надіслати: {e}")
-  else:
-    await message.answer("⚠️ Не вдалося знайти адресата цього повідомлення.")
+# Натискання на кнопку "💬 Надати відповідь"
+@dp_feed.callback_query(F.data.startswith("reply_"))
+async def cb_reply(call: types.CallbackQuery, state: FSMContext):
+  user_id = call.data.split("_")[1]
+  await state.update_data(target_user_id=user_id)
+  await state.set_state(AdminReply.waiting_for_text)
+
+  await call.message.answer(
+      f"✍️ **Введіть текст відповіді для користувача (ID: {user_id}):**",
+      parse_mode=ParseMode.MARKDOWN,
+  )
+  await call.answer()
 
 
-# 2. Обробка повідомлень ВІД КОРИСТУВАЧІВ
+# Надсилання відповіді від адміна
+@dp_feed.message(AdminReply.waiting_for_text, F.from_user.id == ADMIN_ID)
+async def send_reply_to_user(message: types.Message, state: FSMContext):
+  data = await state.get_data()
+  user_id = data.get("target_user_id")
+
+  try:
+    await bot_feed.copy_message(
+        chat_id=user_id,
+        from_chat_id=message.chat.id,
+        message_id=message.message_id,
+    )
+    await message.answer("✅ Ваша відповідь успішно надіслана користувачу!")
+  except Exception as e:
+    await message.answer(f"❌ Помилка надсилання: {e}")
+
+  await state.clear()
+
+
+# Отримання повідомлення від користувача (без автовідповіді)
 @dp_feed.message()
-async def forward_to_admin(message: types.Message):
-  # Бот повністю ігнорує адміна та інших ботів, тому спаму не буде
+async def forward_to_admin(message: types.Message, state: FSMContext):
   if message.from_user.id == ADMIN_ID or message.from_user.is_bot:
     return
 
-  fw = await bot_feed.forward_message(
+  user = message.from_user
+  user_info = f"{user.full_name}" + (
+      f" (@{user.username})" if user.username else ""
+  )
+
+  # Кнопка відповіді для адміна
+  kb = InlineKeyboardMarkup(
+      inline_keyboard=[[
+          InlineKeyboardButton(
+              text="💬 Надати відповідь", callback_data=f"reply_{user.id}"
+          )
+      ]]
+  )
+
+  # Пересилаємо адміну
+  await bot_feed.send_message(
+      chat_id=ADMIN_ID,
+      text=f"📩 **Повідомлення від {user_info} (ID: `{user.id}`):**",
+      parse_mode=ParseMode.MARKDOWN,
+  )
+  await bot_feed.copy_message(
       chat_id=ADMIN_ID,
       from_chat_id=message.chat.id,
       message_id=message.message_id,
+      reply_markup=kb,
   )
-  users_mapping[fw.message_id] = message.from_user.id
-  await message.answer("Дякуємо! Ваше повідомлення отримано.")
 
 
 # --- МІНІ-ВЕБСЕРВЕР ДЛЯ РЕНДЕРА ---
@@ -128,11 +170,8 @@ async def start_web_server():
 # --- ЗАПУСК ---
 async def main():
   logging.basicConfig(level=logging.INFO)
-
-  # Запускаємо веб-сервер для утримання порту Render
   await start_web_server()
 
-  # Запускаємо зчитування ВСІХ повідомлень (без видалення накопичених)
   await asyncio.gather(
       dp_post.start_polling(bot_post), dp_feed.start_polling(bot_feed)
   )
