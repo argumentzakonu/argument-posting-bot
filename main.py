@@ -16,10 +16,10 @@ FEEDBACK_BOT_TOKEN = "8885800194:AAGhqUKiO-kJt6irlx1fMyiN_Rjn17eY2iY"
 CHANNEL_ID = "@argumentzakonu"
 ADMIN_ID = 630822108
 
-CHANNEL_LINK = "https://t.me/argumentzakonu"
 FEEDBACK_LINK = "https://t.me/argumentzakonubot"
 
-SIGNATURE = f"\n\n⚖️ <a href='{CHANNEL_LINK}'>Аргумент Закону</a> | 📩 <a href='{FEEDBACK_LINK}'>Надіслати новину</a>"
+# Підпис з терезами та жирним посиланням
+SIGNATURE = f"\n\n⚖️ <b><a href='{FEEDBACK_LINK}'>Надіслати новину</a></b>"
 # -------------------------------------------------
 
 bot_post = Bot(token=POSTING_BOT_TOKEN)
@@ -83,7 +83,7 @@ async def start_feedback(message: types.Message):
     )
 
 
-# Натискання на кнопку "💬 Надати відповідь"
+# Кнопка "💬 Надати відповідь"
 @dp_feed.callback_query(F.data.startswith("reply_"))
 async def cb_reply(call: types.CallbackQuery, state: FSMContext):
   user_id = call.data.split("_")[1]
@@ -97,7 +97,7 @@ async def cb_reply(call: types.CallbackQuery, state: FSMContext):
   await call.answer()
 
 
-# Надсилання відповіді від адміна
+# Надсилання відповіді користувачу від адміна
 @dp_feed.message(AdminReply.waiting_for_text, F.from_user.id == ADMIN_ID)
 async def send_reply_to_user(message: types.Message, state: FSMContext):
   data = await state.get_data()
@@ -116,7 +116,7 @@ async def send_reply_to_user(message: types.Message, state: FSMContext):
   await state.clear()
 
 
-# Отримання повідомлення від користувача (без автовідповіді)
+# Отримання повідомлення від користувача (мовчки, без автовідповіді)
 @dp_feed.message()
 async def forward_to_admin(message: types.Message, state: FSMContext):
   if message.from_user.id == ADMIN_ID or message.from_user.is_bot:
@@ -127,7 +127,6 @@ async def forward_to_admin(message: types.Message, state: FSMContext):
       f" (@{user.username})" if user.username else ""
   )
 
-  # Кнопка відповіді для адміна
   kb = InlineKeyboardMarkup(
       inline_keyboard=[[
           InlineKeyboardButton(
@@ -136,7 +135,6 @@ async def forward_to_admin(message: types.Message, state: FSMContext):
       ]]
   )
 
-  # Пересилаємо адміну
   await bot_feed.send_message(
       chat_id=ADMIN_ID,
       text=f"📩 **Повідомлення від {user_info} (ID: `{user.id}`):**",
