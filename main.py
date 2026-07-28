@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
@@ -18,7 +19,7 @@ ADMIN_ID = 630822108
 
 FEEDBACK_LINK = "https://t.me/argumentzakonubot"
 
-# Підпис з терезами та жирним посиланням
+# Підпис
 SIGNATURE = f"\n\n⚖️ <b><a href='{FEEDBACK_LINK}'>Зв'язатися з нами | Консультації | Співпраця | Послуги</a></b>"
 # -------------------------------------------------
 
@@ -29,9 +30,19 @@ dp_post = Dispatcher()
 dp_feed = Dispatcher()
 
 
-# Стан для очікування відповіді адміна
 class AdminReply(StatesGroup):
   waiting_for_text = State()
+
+
+# Функція для конвертації Markdown (**жирний**) в HTML (<b>жирний</b>)
+def md_to_html(text: str) -> str:
+  if not text:
+    return ""
+  # Заміна **текст** на <b>текст</b>
+  text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+  # Заміна *текст* на <i>текст</i>
+  text = re.sub(r"\*(.*?)\*", r"<i>\1</i>", text)
+  return text
 
 
 # --- БОТ ПУБЛІКАЦІЙ ---
@@ -46,11 +57,11 @@ async def start_posting(message: types.Message):
 
 @dp_post.message(F.from_user.id == ADMIN_ID, F.text)
 async def post_text(message: types.Message):
-  full_text = message.text + SIGNATURE
+  formatted_text = md_to_html(message.text) + SIGNATURE
   try:
     await bot_post.send_message(
         chat_id=CHANNEL_ID,
-        text=full_text,
+        text=formatted_text,
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
@@ -61,7 +72,7 @@ async def post_text(message: types.Message):
 
 @dp_post.message(F.from_user.id == ADMIN_ID, F.photo)
 async def post_photo(message: types.Message):
-  caption = (message.caption or "") + SIGNATURE
+  caption = md_to_html(message.caption or "") + SIGNATURE
   try:
     await bot_post.send_photo(
         chat_id=CHANNEL_ID,
@@ -83,7 +94,6 @@ async def start_feedback(message: types.Message):
     )
 
 
-# Кнопка "💬 Надати відповідь"
 @dp_feed.callback_query(F.data.startswith("reply_"))
 async def cb_reply(call: types.CallbackQuery, state: FSMContext):
   user_id = call.data.split("_")[1]
@@ -97,7 +107,6 @@ async def cb_reply(call: types.CallbackQuery, state: FSMContext):
   await call.answer()
 
 
-# Надсилання відповіді користувачу від адміна
 @dp_feed.message(AdminReply.waiting_for_text, F.from_user.id == ADMIN_ID)
 async def send_reply_to_user(message: types.Message, state: FSMContext):
   data = await state.get_data()
@@ -116,7 +125,6 @@ async def send_reply_to_user(message: types.Message, state: FSMContext):
   await state.clear()
 
 
-# Отримання повідомлення від користувача (мовчки, без автовідповіді)
 @dp_feed.message()
 async def forward_to_admin(message: types.Message, state: FSMContext):
   if message.from_user.id == ADMIN_ID or message.from_user.is_bot:
