@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
@@ -33,6 +34,14 @@ class AdminReply(StatesGroup):
     waiting_for_text = State()
 
 
+def fix_case_numbers(text: str) -> str:
+    """Обгортає номери справ у <code></code>, щоб Telegram не робив з них посилання."""
+    if not text:
+        return text
+    pattern = r'(№?\s*\d+/\d+/\d+)'
+    return re.sub(pattern, r'<code>\1</code>', text)
+
+
 # --- БОТ ПУБЛІКАЦІЙ ---
 @dp_post.message(CommandStart())
 async def start_posting(message: types.Message):
@@ -45,7 +54,8 @@ async def start_posting(message: types.Message):
 
 @dp_post.message(F.from_user.id == ADMIN_ID, F.text)
 async def post_text(message: types.Message):
-    full_text = message.html_text + SIGNATURE
+    text_fixed = fix_case_numbers(message.html_text)
+    full_text = text_fixed + SIGNATURE
     try:
         await bot_post.send_message(
             chat_id=CHANNEL_ID,
@@ -60,7 +70,9 @@ async def post_text(message: types.Message):
 
 @dp_post.message(F.from_user.id == ADMIN_ID, F.photo)
 async def post_photo(message: types.Message):
-    caption = (message.html_text if message.caption else "") + SIGNATURE
+    raw_caption = message.html_text if message.caption else ""
+    caption_fixed = fix_case_numbers(raw_caption)
+    caption = caption_fixed + SIGNATURE
     try:
         await bot_post.send_photo(
             chat_id=CHANNEL_ID,
