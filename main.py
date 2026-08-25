@@ -35,12 +35,11 @@ class AdminReply(StatesGroup):
 
 
 def fix_case_numbers(text: str) -> str:
-    """Замінює сліші у номерах справ на ' / ', щоб Telegram не робив з них посилання."""
+    """Огортає номер справи у <code> та <b>, додає червоний маркер, щоб не було посилання."""
     if not text:
         return text
-    # Знаходить номери справ і додає пробіли навколо /
-    pattern = r'(№?\s*\d+)/(\d+)/(\d+)'
-    return re.sub(pattern, r'\1 / \2 / \3', text)
+    pattern = r'(№?\s*\d+/\d+/\d+)'
+    return re.sub(pattern, r'🔴 <b><code>\1</code></b>', text)
 
 
 # --- БОТ ПУБЛІКАЦІЙ ---
