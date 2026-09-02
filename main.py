@@ -66,7 +66,49 @@ async def post_text(message: types.Message):
         await message.answer("✅ **Опубліковано в канал!**")
     except Exception as e:
         await message.answer(f"❌ Помилка: `{e}`", parse_mode=ParseMode.MARKDOWN)
+@dp_post.message(F.from_user.id == ADMIN_ID, F.photo)
+async def post_photo(message: types.Message):
+    raw_caption = message.html_text if message.caption else ""
+    caption_fixed = fix_case_numbers(raw_caption)
+    caption = caption_fixed + SIGNATURE
+    try:
+        await bot_post.send_photo(
+            chat_id=CHANNEL_ID,
+            photo=message.photo[-1].file_id,
+            caption=caption,
+            parse_mode=ParseMode.HTML,
+        )
+        await message.answer("✅ **Фото опубліковано!**")
+    except Exception as e:
+        await message.answer(f"❌ Помилка: `{e}`", parse_mode=ParseMode.MARKDOWN)
 
+
+# ⬇️ ⬇️ ⬇️ ВСТАВЛЯТИ СЮДИ (після post_photo і перед "БОТ ЗВОРОТНОГО ЗВ'ЯЗКУ") ⬇️ ⬇️ ⬇️
+
+@dp_post.message(F.from_user.id == ADMIN_ID, F.document)
+async def post_document(message: types.Message):
+    raw_caption = message.html_text if message.caption else ""
+    caption_fixed = fix_case_numbers(raw_caption)
+    caption = caption_fixed + SIGNATURE
+    
+    if len(caption) > 1024:
+        await message.answer(
+            f"❌ **Помилка:** Текст під документом занадто довгий ({len(caption)}/1024 символів).\n"
+            "Скоротіть текст або опублікуйте його окремим текстовим дописом.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    try:
+        await bot_post.send_document(
+            chat_id=CHANNEL_ID,
+            document=message.document.file_id,
+            caption=caption,
+            parse_mode=ParseMode.HTML,
+        )
+        await message.answer("✅ **Документ опубліковано!**")
+    except Exception as e:
+        await message.answer(f"❌ Помилка: `{e}`", parse_mode=ParseMode.MARKDOWN)
 
 @dp_post.message(F.from_user.id == ADMIN_ID, F.photo)
 async def post_photo(message: types.Message):
